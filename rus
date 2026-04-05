@@ -17,6 +17,13 @@ deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free
 deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
 EOF
 
+deb http://mirror.yandex.ru/debian bookworm main contrib non-free non-free-firmware
+deb http://mirror.yandex.ru/debian-security bookworm-security main contrib non-free-firmware
+deb http://mirror.yandex.ru/debian bookworm-updates main contrib non-free-firmware
+
+deb http://mirror.yandex.ru/debian trixie main contrib non-free non-free-firmware
+deb http://mirror.yandex.ru/debian-security trixie-security main contrib non-free-firmware
+deb http://mirror.yandex.ru/debian trixie-updates main contrib non-free-firmware
 
 
 # 3. Обновление и установка пакетов
@@ -938,19 +945,25 @@ apt install yandex-browser-stable -y
 which yandex-browser
 yandex-browser --version
 
-# ============================================
-# ЗАКЛЮЧЕНИЕ
-# ============================================
-
-# Все задания Модуля 2 выполнены:
-# 1. Samba DC ✅
-# 2. RAID0 ✅
-# 3. NFS ✅
-# 4. Chrony NTP ✅
-# 5. Ansible ✅
-# 6. Docker + docker-compose ✅
-# 7. Apache + MariaDB ✅
-# 8. Port forwarding (DNAT) ✅
-# 9. Nginx reverse proxy ✅
-# 10. Web authentication (htpasswd) ✅
-# 11. Яндекс Браузер ✅
++----------+------------+--------------------------------+-------------------+-------------------+
+| Устройство | Интерфейс | Куда подключен                 | IP-адрес          | Сеть              |
++----------+------------+--------------------------------+-------------------+-------------------+
+| ISP      | ens192     | Магистральный провайдер        | DHCP              | любая             |
+| ISP      | ens224     | HQ-RTR (ens192)                | 172.16.1.1/28     | 172.16.1.0/28     |
+| ISP      | ens256     | BR-RTR (ens192)                | 172.16.2.1/28     | 172.16.2.0/28     |
++----------+------------+--------------------------------+-------------------+-------------------+
+| HQ-RTR   | ens192     | ISP (ens224)                   | 172.16.1.2/28     | 172.16.1.0/28     |
+| HQ-RTR   | ens224     | Коммутатор HQ (trunk)          | -                 | -                 |
+| HQ-RTR   | ens224.100 | HQ-SRV (ens192) VLAN 100       | 192.168.100.1/27  | 192.168.100.0/27  |
+| HQ-RTR   | ens224.200 | HQ-CLI (ens192) VLAN 200       | 192.168.200.1/27  | 192.168.200.0/27  |
+| HQ-RTR   | ens224.999 | Управление VLAN 999            | 192.168.999.1/29  | 192.168.999.0/29  |
++----------+------------+--------------------------------+-------------------+-------------------+
+| BR-RTR   | ens192     | ISP (ens256)                   | 172.16.2.2/28     | 172.16.2.0/28     |
+| BR-RTR   | ens224     | BR-SRV (ens192)                | 10.10.10.1/28     | 10.10.10.0/28     |
++----------+------------+--------------------------------+-------------------+-------------------+
+| HQ-SRV   | ens192     | Коммутатор HQ (VLAN 100)       | 192.168.100.2/27  | 192.168.100.0/27  |
++----------+------------+--------------------------------+-------------------+-------------------+
+| BR-SRV   | ens192     | BR-RTR (ens224)                | 10.10.10.2/28     | 10.10.10.0/28     |
++----------+------------+--------------------------------+-------------------+-------------------+
+| HQ-CLI   | ens192     | Коммутатор HQ (VLAN 200)       | DHCP              | 192.168.200.0/27  |
++----------+------------+--------------------------------+-------------------+-------------------+	ens192	Коммутатор HQ (VLAN 200)	DHCP	192.168.200.0/27
