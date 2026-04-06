@@ -968,3 +968,584 @@ yandex-browser --version
 +----------+------------+--------------------------------+-------------------+-------------------+
 | HQ-CLI   | ens192     | Коммутатор HQ (VLAN 200)       | DHCP              | 192.168.200.0/27  |
 +----------+------------+--------------------------------+-------------------+-------------------+	ens192	Коммутатор HQ (VLAN 200)	DHCP	192.168.200.0/27
+
+
+
+1.3 Настройка имен устройств (FQDN)
+
+ISP:
+bash
+hostnamectl set-hostname isp.au-team.irpo
+
+HQ-RTR:
+bash
+hostnamectl set-hostname hq-rtr.au-team.irpo
+
+BR-RTR:
+bash
+hostnamectl set-hostname br-rtr.au-team.irpo
+
+HQ-SRV:
+bash
+hostnamectl set-hostname hq-srv.au-team.irpo
+
+BR-SRV:
+bash
+hostnamectl set-hostname br-srv.au-team.irpo
+
+HQ-CLI:
+bash
+hostnamectl set-hostname hq-cli.au-team.irpo
+
+1.4 Настройка ISP
+
+bash
+cat > /etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto ens192
+iface ens192 inet dhcp
+
+auto ens224
+iface ens224 inet static
+    address 172.16.1.1
+    netmask 255.255.255.240
+
+auto ens256
+iface ens256 inet static
+    address 172.16.2.1
+    netmask 255.255.255.240
+EOF
+
+systemctl restart networking
+
+iptables -t nat -A POSTROUTING -o ens192 -j MASQUERADE
+iptables -A FORWARD -i ens192 -o ens224 -j ACCEPT
+iptables -A FORWARD -i ens224 -o ens192 -j ACCEPT
+iptables -A FORWARD -i ens192 -o ens256 -j ACCEPT
+iptables -A FORWARD -i ens256 -o ens192 -j ACCEPT
+
+mkdir -p /etc/iptables
+iptables-save > /etc/iptables/rules.v4
+
+1.5 Настройка HQ-RTR
+bash
+cat > /etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto ens192
+iface ens192 inet static
+    address 172.16.1.2
+    netmask 255.255.255.240
+    gateway 172.16.1.1
+
+auto ens224
+iface ens224 inet manual
+
+auto ens224.100
+iface ens224.100 inet static
+    address 192.168.1.1
+    netmask 255.255.255.224
+    vlan-raw-device ens224
+
+auto ens224.200
+iface ens224.200 inet static
+    address 192.168.1.33
+    netmask 255.255.255.240
+    vlan-raw-device ens224
+
+auto ens224.999
+iface ens224.999 inet static
+    address 192.168.1.49
+    netmask 255.255.255.248
+    vlan-raw-device ens224
+EOF
+
+systemctl restart networking
+
+sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
+iptables -t nat -A POSTROUTING -o ens192 -j MASQUERADE
+iptables -P FORWARD ACCEPT
+iptables-save > /etc/iptables/rules.v4
+
+useradd -m -s /bin/bash net_admin
+echo "net_admin:P@ssw0rd" | chpasswd
+echo "net_admin ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/net_admin
+chmod 440 /etc/sudoers.d/net_admin
+
+1.6 Настройка BR-RTR
+bash
+cat > /etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto ens192
+iface ens192 inet static
+    address 172.16.2.2
+    netmask 255.255.255.240
+    gateway 172.16.2.1
+
+auto ens224
+iface ens224 inet static
+    address 192.168.2.1
+    netmask 255.255.255.240
+EOF
+
+systemctl restart networking
+
+sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
+iptables -t nat -A POSTROUTING -o ens192 -j MASQUERADE
+iptables -P FORWARD ACCEPT
+iptables-save > /etc/iptables/rules.v4
+
+useradd -m -s /bin/bash net_admin
+echo "net_admin:P@ssw0rd" | chpasswd
+echo "net_admin ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/net_admin
+chmod 440 /etc/sudoers.d/net_admin
+
+1.7 Настройка HQ-SRV
+bash
+cat > /etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto ens192
+iface ens192 inet static
+    address 192.168.1.2
+    netmask 255.255.255.224
+    gateway 192.168.1.1
+EOF
+
+systemctl restart networking
+
+useradd -u 2026 -m -s /bin/bash sshuser
+echo "sshuser:P@ssw0rd" | chpasswd
+echo "sshuser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/sshuser
+chmod 440 /etc/sudoers.d/sshuser
+
+sed -i 's/#Port 22/Port 2026/' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+echo "AllowUsers sshuser" >> /etc/ssh/sshd_config
+echo "MaxAuthTries 2" >> /etc/ssh/sshd_config
+echo "Authorized access only" > /etc/ssh/banner
+echo "Banner /etc/ssh/banner" >> /etc/ssh/sshd_config
+systemctl restart sshd
+1.8 Настройка BR-SRV
+
+bash
+cat > /etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto ens192
+iface ens192 inet static
+    address 192.168.2.2
+    netmask 255.255.255.240
+    gateway 192.168.2.1
+EOF
+
+systemctl restart networking
+
+useradd -u 2026 -m -s /bin/bash sshuser
+echo "sshuser:P@ssw0rd" | chpasswd
+echo "sshuser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/sshuser
+chmod 440 /etc/sudoers.d/sshuser
+
+sed -i 's/#Port 22/Port 2026/' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+echo "AllowUsers sshuser" >> /etc/ssh/sshd_config
+echo "MaxAuthTries 2" >> /etc/ssh/sshd_config
+echo "Authorized access only" > /etc/ssh/banner
+echo "Banner /etc/ssh/banner" >> /etc/ssh/sshd_config
+systemctl restart sshd
+
+1.9 Настройка HQ-CLI
+bash
+cat > /etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto ens192
+iface ens192 inet dhcp
+EOF
+
+systemctl restart networking
+1.10 DHCP на HQ-RTR
+bash
+apt update
+apt install isc-dhcp-server -y
+
+cat > /etc/dhcp/dhcpd.conf << 'EOF'
+option domain-name "au-team.irpo";
+option domain-name-servers 192.168.1.2;
+default-lease-time 600;
+max-lease-time 7200;
+
+subnet 192.168.1.32 netmask 255.255.255.240 {
+    range 192.168.1.34 192.168.1.46;
+    option routers 192.168.1.33;
+    option domain-name-servers 192.168.1.2;
+    option domain-name "au-team.irpo";
+}
+EOF
+
+echo 'INTERFACESv4="ens224.200"' > /etc/default/isc-dhcp-server
+systemctl restart isc-dhcp-server
+
+1.11 DNS на HQ-SRV
+apt update
+apt install bind9 -y
+
+cat > /etc/bind/named.conf.local << 'EOF'
+zone "au-team.irpo" {
+    type master;
+    file "/etc/bind/db.au-team.irpo";
+};
+
+zone "1.168.192.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.192.168.1";
+};
+EOF
+
+cat > /etc/bind/db.au-team.irpo << 'EOF'
+$TTL 604800
+@ IN SOA hq-srv.au-team.irpo. admin.au-team.irpo. (
+    2026040601 ; Serial
+    604800 ; Refresh
+    86400 ; Retry
+    2419200 ; Expire
+    604800 ) ; Negative Cache TTL
+;
+@ IN NS hq-srv.au-team.irpo.
+hq-rtr IN A 192.168.1.49
+br-rtr IN A 172.16.2.2
+hq-srv IN A 192.168.1.2
+hq-cli IN A 192.168.1.34
+br-srv IN A 192.168.2.2
+docker IN A 172.16.1.1
+web IN A 172.16.2.1
+EOF
+
+cat > /etc/bind/db.192.168.1 << 'EOF'
+$TTL 604800
+@ IN SOA hq-srv.au-team.irpo. admin.au-team.irpo. (
+    2026040601 ; Serial
+    604800 ; Refresh
+    86400 ; Retry
+    2419200 ; Expire
+    604800 ) ; Negative Cache TTL
+;
+@ IN NS hq-srv.au-team.irpo.
+49 IN PTR hq-rtr.au-team.irpo.
+2 IN PTR hq-srv.au-team.irpo.
+34 IN PTR hq-cli.au-team.irpo.
+EOF
+
+cat > /etc/bind/named.conf.options << 'EOF'
+options {
+    directory "/var/cache/bind";
+    forwarders {
+        77.88.8.7;
+        77.88.8.3;
+    };
+    dnssec-validation auto;
+    listen-on { any; };
+    allow-query { any; };
+};
+EOF
+
+systemctl restart bind9
+
+1.12 GRE туннель
+
+HQ-RTR:
+
+bash
+ip tunnel add tun1 mode gre remote 172.16.2.2 local 172.16.1.2 ttl 255
+ip addr add 10.0.0.1/30 dev tun1
+ip link set tun1 up
+
+BR-RTR:
+
+bash
+ip tunnel add tun1 mode gre remote 172.16.1.2 local 172.16.2.2 ttl 255
+ip addr add 10.0.0.2/30 dev tun1
+ip link set tun1 up
+
+1.13 OSPF
+HQ-RTR:
+
+bash
+apt install frr -y
+echo "zebra=yes
+ospfd=yes" > /etc/frr/daemons
+
+cat > /etc/frr/frr.conf << 'EOF'
+router ospf
+ ospf router-id 1.1.1.1
+ network 10.0.0.0/30 area 0
+ interface tun1
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 md5 P@ssw0rd
+EOF
+
+systemctl restart frr
+
+BR-RTR:
+
+bash
+apt install frr -y
+echo "zebra=yes
+ospfd=yes" > /etc/frr/daemons
+
+cat > /etc/frr/frr.conf << 'EOF'
+router ospf
+ ospf router-id 2.2.2.2
+ network 10.0.0.0/30 area 0
+ interface tun1
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 md5 P@ssw0rd
+EOF
+
+systemctl restart frr
+
+1.14 Часовой пояс (все устройства)
+bash
+timedatectl set-timezone Asia/Yekaterinburg
+
+МОДУЛЬ 2. ОРГАНИЗАЦИЯ СЕТЕВОГО АДМИНИСТРИРОВАНИЯ
+ВНИМАНИЕ: В МОДУЛЕ 2 ИСПОЛЬЗУЕТСЯ ОТДЕЛЬНЫЙ СТЕНД. IP-АДРЕСА, NAT, ТУННЕЛЬ, OSPF УЖЕ НАСТРОЕНЫ.
+
+2.1 Samba DC на BR-SRV
+bash
+apt update
+apt install samba dc -y
+
+samba-tool domain provision --use-rfc2307 --realm=au-team.irpo --domain=AU-TEAM --adminpass=P@ssw0rd
+
+На HQ-CLI (ввод в домен):
+
+bash
+samba-tool domain join au-team.irpo DC -U Administrator
+На BR-SRV (создание пользователей и группы):
+
+bash
+for i in 1 2 3 4 5; do
+    samba-tool user create hquser$i P@ssw0rd
+done
+
+samba-tool group add hq
+
+for i in 1 2 3 4 5; do
+    samba-tool group addmembers hq hquser$i
+done
+На HQ-CLI (ограничение команд):
+
+bash
+echo '%hq ALL=(ALL) /bin/cat, /bin/grep, /usr/bin/id' >> /etc/sudoers
+
+2.2 RAID 0 на HQ-SRV
+bash
+apt install mdadm -y
+
+mdadm --create /dev/md0 --level=0 --raid-devices=2 /dev/sdb /dev/sdc
+mkfs.ext4 /dev/md0
+mkdir /raid
+echo '/dev/md0 /raid ext4 defaults 0 0' >> /etc/fstab
+mount -a
+mdadm --detail --scan >> /etc/mdadm/mdadm.conf
+
+2.3 NFS на HQ-SRV
+bash
+apt install nfs-kernel-server -y
+mkdir -p /raid/nfs
+echo '/raid/nfs 192.168.1.32/28(rw,sync,no_subtree_check)' >> /etc/exports
+exportfs -a
+systemctl restart nfs-kernel-server
+На HQ-CLI:
+
+bash
+apt install nfs-common -y
+mkdir -p /mnt/nfs
+echo '192.168.1.2:/raid/nfs /mnt/nfs nfs defaults 0 0' >> /etc/fstab
+mount -a
+
+2.4 Chrony на ISP
+bash
+apt install chrony -y
+
+cat > /etc/chrony/chrony.conf << 'EOF'
+server 0.ru.pool.ntp.org iburst
+local stratum 5
+allow 172.16.0.0/16
+allow 192.168.0.0/16
+EOF
+
+systemctl restart chrony
+На HQ-SRV, HQ-CLI, BR-RTR, BR-SRV:
+
+bash
+apt install chrony -y
+sed -i 's/^pool/#pool/' /etc/chrony/chrony.conf
+echo "server 172.16.1.1 iburst" >> /etc/chrony/chrony.conf
+systemctl restart chrony
+
+2.5 Ansible на BR-SRV
+bash
+apt install ansible -y
+mkdir -p /etc/ansible
+
+cat > /etc/ansible/hosts << 'EOF'
+[all]
+HQ-SRV ansible_host=192.168.1.2
+HQ-CLI ansible_host=192.168.1.34
+HQ-RTR ansible_host=172.16.1.2
+BR-RTR ansible_host=172.16.2.2
+
+[all:vars]
+ansible_user=sshuser
+ansible_ssh_port=2026
+EOF
+
+ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+
+ssh-copy-id -p 2026 sshuser@192.168.1.2
+ssh-copy-id -p 2026 sshuser@192.168.1.34
+ssh-copy-id -p 2026 sshuser@172.16.1.2
+ssh-copy-id -p 2026 sshuser@172.16.2.2
+
+ansible all -m ping
+
+2.6 Docker на BR-SRV
+bash
+apt install docker.io docker-compose -y
+
+mount /dev/cdrom /mnt
+
+docker load -i /mnt/docker/site_latest.tar
+docker load -i /mnt/docker/mariadb_latest.tar
+
+mkdir -p /opt/testapp
+
+cat > /opt/testapp/docker-compose.yml << 'EOF'
+version: '3'
+services:
+  testapp:
+    image: site_latest
+    container_name: testapp
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_NAME: testdb
+      DB_USER: test
+      DB_PASSWORD: P@ssw0rd
+  db:
+    image: mariadb_latest
+    container_name: db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: test
+      MYSQL_PASSWORD: P@ssw0rd
+EOF
+
+cd /opt/testapp && docker-compose up -d
+
+2.7 Apache на HQ-SRV
+bash
+apt install apache2 mariadb-server php php-mysql -y
+
+mysql < /mnt/web/dump.sql
+
+mysql -e "CREATE USER 'web'@'localhost' IDENTIFIED BY 'P@ssw0rd';"
+mysql -e "GRANT ALL PRIVILEGES ON webdb.* TO 'web'@'localhost';"
+mysql -e "FLUSH PRIVILEGES;"
+
+cp /mnt/web/index.php /var/www/html/
+cp -r /mnt/web/images /var/www/html/
+
+systemctl restart apache2 mariadb
+В файле /var/www/html/index.php измените:
+
+php
+$db_user = 'web';
+$db_password = 'P@ssw0rd';
+$db_name = 'webdb';
+
+2.8 Статическая трансляция портов
+HQ-RTR:
+
+bash
+iptables -t nat -A PREROUTING -i ens192 -p tcp --dport 8080 -j DNAT --to-destination 192.168.1.2:8080
+iptables -t nat -A PREROUTING -i ens192 -p tcp --dport 2026 -j DNAT --to-destination 192.168.1.2:2026
+iptables-save > /etc/iptables/rules.v4
+BR-RTR:
+
+bash
+iptables -t nat -A PREROUTING -i ens192 -p tcp --dport 8080 -j DNAT --to-destination 192.168.2.2:8080
+iptables -t nat -A PREROUTING -i ens192 -p tcp --dport 2026 -j DNAT --to-destination 192.168.2.2:2026
+iptables-save > /etc/iptables/rules.v4
+
+2.9 Nginx Reverse Proxy на ISP
+bash
+apt install nginx apache2-utils -y
+
+htpasswd -bc /etc/nginx/.htpasswd WEB P@ssw0rd
+
+cat > /etc/nginx/sites-available/proxy << 'EOF'
+server {
+    listen 80;
+    server_name web.au-team.irpo;
+
+    auth_basic "Restricted Access";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        proxy_pass http://172.16.1.2:8080;
+        proxy_set_header Host $host;
+    }
+}
+
+server {
+    listen 80;
+    server_name docker.au-team.irpo;
+
+    location / {
+        proxy_pass http://172.16.2.2:8080;
+        proxy_set_header Host $host;
+    }
+}
+EOF
+
+ln -s /etc/nginx/sites-available/proxy /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl restart nginx
+
+2.10 Яндекс Браузер на HQ-CLI
+bash
+wget -O yandex-browser.deb https://repo.yandex.ru/yandex-browser/deb/pool/main/y/yandex-browser-stable/yandex-browser-stable_latest_amd64.deb
+dpkg -i yandex-browser.deb
+apt --fix-broken install -y
+
+ПРОВЕРКА РАБОТОСПОСОБНОСТИ
+bash
+# С HQ-CLI
+ping 8.8.8.8
+nslookup hq-rtr.au-team.irpo
+ping 10.0.0.2
+
+# На BR-SRV
+docker ps
+ansible all -m ping
+
+# В браузере
+http://web.au-team.irpo
+http://docker.au-team.irpo
