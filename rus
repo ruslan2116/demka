@@ -91,7 +91,7 @@ auto ens224.999
 iface ens224.999 inet static
     address 192.168.99.1
     netmask 255.255.255.248
-    vlan-raw-device ens37
+    vlan-raw-device ens224
 EOF
 systemctl restart networking
 
