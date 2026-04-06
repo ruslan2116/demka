@@ -87,8 +87,8 @@ iface ens224.200 inet static
     address 192.168.200.1
     netmask 255.255.255.224
 
-auto ens37.999
-iface ens37.999 inet static
+auto ens224.999
+iface ens224.999 inet static
     address 192.168.99.1
     netmask 255.255.255.248
     vlan-raw-device ens37
